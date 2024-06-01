@@ -1,0 +1,5 @@
+{
+  "watch_directory": "C:\\Logs",
+  "target_directory": "D:\\network",
+  "file_extensions": [".txt", ".jpg", ".png"]
+}
