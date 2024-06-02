@@ -4,31 +4,50 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/kardianos/service"
 )
 
 var logger service.Logger
 
+func initLogFile(exePath string) {
+    logFile := filepath.Join(exePath, "service.log")
+    f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+    if err != nil {
+        log.Fatalf("Failed to open log file: %v", err)
+    }
+    log.SetOutput(f)
+}
+
 func main() {
+    exePath, err := os.Executable()
+    if err != nil {
+        log.Fatalf("Failed to get executable path: %v", err)
+    }
+    exeDir := filepath.Dir(exePath)
+    initLogFile(exeDir)
+    log.Println("Service is starting...")
+
+    configFilePath := filepath.Join(exeDir, "config.json")
+
     svcConfig := &service.Config{
         Name:        "GoFileWatcher",
         DisplayName: "Go File Watcher Service",
         Description: "This service watches a directory and copies files with specific extensions to a target directory.",
     }
 
-    prg := &program{}
+    prg := &program{configFilePath: configFilePath}
     s, err := service.New(prg, svcConfig)
     if err != nil {
-        log.Fatal(err)
+        log.Fatalf("Failed to create service: %v", err)
     }
 
     logger, err = s.Logger(nil)
     if err != nil {
-        log.Fatal(err)
+        log.Fatalf("Failed to create service logger: %v", err)
     }
 
-    // Process command line arguments
     if len(os.Args) > 1 {
         cmd := os.Args[1]
         switch cmd {
@@ -65,5 +84,6 @@ func main() {
     err = s.Run()
     if err != nil {
         logger.Error(err)
+        log.Fatalf("Service failed to run: %v", err)
     }
 }

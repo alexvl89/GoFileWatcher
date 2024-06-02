@@ -1,5 +1,7 @@
 {
   "watch_directory": "C:\\Logs",
   "target_directory": "D:\\network",
+  "network_user": "username",
+  "network_password": "password",
   "file_extensions": [".txt", ".jpg", ".png"]
 }
