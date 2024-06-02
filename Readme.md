@@ -12,6 +12,7 @@
 
 
 # Установка сервиса
+go build -o GoFileWatcher.exe -buildvcs=false
 go build -o GoFileWatcher.exe
 GoFileWatcher.exe install
 
