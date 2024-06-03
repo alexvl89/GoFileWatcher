@@ -8,11 +8,14 @@ import (
 type Config struct {
     WatchDirectory  string   `json:"watch_directory"`
     TargetDirectory string   `json:"target_directory"`
+    NetworkUser     string   `json:"network_user"`
+    NetworkPassword string   `json:"network_password"`
     FileExtensions  []string `json:"file_extensions"`
 }
 
 func loadConfig(configFile string) (Config, error) {
     var config Config
+
     file, err := os.Open(configFile)
     if err != nil {
         return config, err

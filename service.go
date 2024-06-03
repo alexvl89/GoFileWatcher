@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -26,6 +27,12 @@ func (p *program) Start(s service.Service) error {
     p.config, err = loadConfig(p.configFilePath)
     if err != nil {
         log.Printf("Error loading config: %v", err)
+        return err
+    }
+
+    // Mount network directory
+    if err = mountNetworkDirectory(p.config.TargetDirectory, p.config.NetworkUser, p.config.NetworkPassword); err != nil {
+        log.Printf("Error mounting network directory: %v", err)
         return err
     }
 
@@ -73,19 +80,79 @@ func (p *program) run() {
 func (p *program) handleCreateEvent(event fsnotify.Event) {
     for _, ext := range p.config.FileExtensions {
         if strings.HasSuffix(event.Name, ext) {
-            p.mu.Lock()
-            defer p.mu.Unlock()
+            go func(fileName string) {
+                p.mu.Lock()
+                defer p.mu.Unlock()
 
-            targetPath := filepath.Join(p.config.TargetDirectory, filepath.Base(event.Name))
-            log.Printf("Copying file from %s to %s", event.Name, targetPath)
-            if err := copyFileWithRetries(event.Name, targetPath, 5); err != nil {
-                log.Printf("Failed to copy file: %s", err)
-            } else {
-                log.Printf("Copied file: %s to %s", event.Name, targetPath)
-            }
+                if waitForFile(fileName, 10*time.Second) {
+                    targetPath := filepath.Join(p.config.TargetDirectory, filepath.Base(fileName))
+                    log.Printf("Copying file from %s to %s", fileName, targetPath)
+                    if err := copyFileWithRetries(fileName, targetPath, 5); err != nil {
+                        log.Printf("Failed to copy file: %s", err)
+                    } else {
+                        log.Printf("Copied file: %s to %s", fileName, targetPath)
+                    }
+                } else {
+                    log.Printf("File %s did not stabilize in time", fileName)
+                }
+            }(event.Name)
             break
         }
     }
+}
+
+func waitForFile(fileName string, timeout time.Duration) bool {
+    ticker := time.NewTicker(500 * time.Millisecond)
+    defer ticker.Stop()
+
+    timeoutTimer := time.NewTimer(timeout)
+    defer timeoutTimer.Stop()
+
+    var lastSize int64 = -1
+    for {
+        select {
+        case <-ticker.C:
+            fileInfo, err := os.Stat(fileName)
+            if err != nil {
+                log.Printf("Error stating file: %s", err)
+                return false
+            }
+
+            currentSize := fileInfo.Size()
+            if currentSize == lastSize {
+                return true
+            }
+            lastSize = currentSize
+
+        case <-timeoutTimer.C:
+            return false
+        }
+    }
+}
+
+func mountNetworkDirectory(targetDir, username, password string) error {
+    // Unmount all previous connections to the network server
+    unmountAllCmd := exec.Command("net", "use", "*", "/delete", "/yes")
+    unmountAllOutput, unmountAllErr := unmountAllCmd.CombinedOutput()
+    if unmountAllErr != nil {
+        log.Printf("Warning: Unmounting all network connections failed: %v. Output: %s", unmountAllErr, unmountAllOutput)
+    }
+
+    // Unmount the specific network directory if it is already mounted
+    unmountCmd := exec.Command("net", "use", targetDir, "/delete")
+    unmountOutput, unmountErr := unmountCmd.CombinedOutput()
+    if unmountErr != nil {
+        log.Printf("Warning: Unmounting network directory failed: %v. Output: %s", unmountErr, unmountOutput)
+    }
+
+    // Mount the network directory
+    cmd := exec.Command("net", "use", targetDir, "/user:"+username, password)
+    output, err := cmd.CombinedOutput()
+    if err != nil {
+        log.Printf("Error mounting network directory. Command: %s, Output: %s", cmd.String(), output)
+        return fmt.Errorf("failed to mount network directory: %w, output: %s", err, output)
+    }
+    return nil
 }
 
 func copyFileWithRetries(src, dst string, maxRetries int) error {

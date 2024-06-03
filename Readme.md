@@ -13,13 +13,19 @@
 
 # Установка сервиса
 go build -o GoFileWatcher.exe -buildvcs=false
+или
 go build -o GoFileWatcher.exe
+
 GoFileWatcher.exe install
 
 # Запуск сервиса
 GoFileWatcher.exe start
 
+# Останов сервиса
+GoFileWatcher.exe stop
 
+# Удаление сервиса
+GoFileWatcher.exe uninstall
 
 {
   "watch_directory": "C:\\Logs",
